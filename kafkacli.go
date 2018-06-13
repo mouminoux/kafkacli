@@ -2,48 +2,57 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"github.com/confluentinc/confluent-kafka-go/kafka"
 	"github.com/satori/go.uuid"
-	"os"
-	"strings"
+	"github.com/jawher/mow.cli"
 )
 
 func main() {
-	args := os.Args
-	bootstrapServers := args[1]
-	topics := strings.Split(args[2], ",")
+	app := cli.App("kafkacli", "Kafka consumer")
+	app.Spec = "-b -t..."
+	var (
+		bootstrapServers = app.StringOpt("b broker brokers", "localhost", "brokers")
+		topics           = app.StringsOpt("t topic", nil, "topic")
+	)
 
-	groupId, _ := uuid.NewV4()
+	app.Action = func() {
+		fmt.Printf("Topics: %s from %s", topics, *bootstrapServers)
 
-	c, err := kafka.NewConsumer(&kafka.ConfigMap{
-		"bootstrap.servers": bootstrapServers,
-		"group.id":          groupId,
-		"auto.offset.reset": "earliest",
-	})
+		groupId, _ := uuid.NewV4()
 
-	if err != nil {
-		panic(err)
-	}
-
-	c.SubscribeTopics(topics, nil)
-
-	for {
-		msg, err := c.ReadMessage(-1)
+		c, err := kafka.NewConsumer(&kafka.ConfigMap{
+			"bootstrap.servers": *bootstrapServers,
+			"group.id":          groupId,
+			"auto.offset.reset": "earliest",
+		})
 
 		if err != nil {
-			fmt.Printf("Consumer error: %v (%v)\n", err, msg)
-			break
+			panic(err)
 		}
 
-		fmt.Printf("[%s]----------------\n", msg.Timestamp)
-		fmt.Printf("Headers on %s:", msg.TopicPartition)
-		for _, header := range msg.Headers {
-			fmt.Printf(" %s=%s", header.Key, string(header.Value))
-		}
-		fmt.Printf("\n")
+		c.SubscribeTopics(*topics, nil)
 
-		fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
+		for {
+			msg, err := c.ReadMessage(-1)
+
+			if err != nil {
+				fmt.Printf("Consumer error: %v (%v)\n", err, msg)
+				break
+			}
+
+			fmt.Printf("[%s]----------------\n", msg.Timestamp)
+			fmt.Printf("Headers on %s:", msg.TopicPartition)
+			for _, header := range msg.Headers {
+				fmt.Printf(" %s=%s", header.Key, string(header.Value))
+			}
+			fmt.Printf("\n")
+
+			fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
+		}
+
+		c.Close()
 	}
 
-	c.Close()
+	app.Run(os.Args)
 }
