@@ -2,10 +2,16 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"os"
-	"github.com/confluentinc/confluent-kafka-go/kafka"
-	"github.com/satori/go.uuid"
+	"os/signal"
+
+	"github.com/Shopify/sarama"
+
+	cluster "github.com/bsm/sarama-cluster"
+
 	"github.com/jawher/mow.cli"
+	"github.com/satori/go.uuid"
 )
 
 func main() {
@@ -17,42 +23,70 @@ func main() {
 	)
 
 	app.Action = func() {
-		fmt.Printf("Topics: %s from %s", topics, *bootstrapServers)
+		fmt.Printf("Topics: %v from %v", *topics, *bootstrapServers)
 
-		groupId, _ := uuid.NewV4()
+		groupID, err := uuid.NewV4()
+		die(err)
 
-		c, err := kafka.NewConsumer(&kafka.ConfigMap{
-			"bootstrap.servers": *bootstrapServers,
-			"group.id":          groupId,
-			"auto.offset.reset": "earliest",
-		})
+		config := cluster.NewConfig()
+		config.Version = sarama.V1_0_0_0
+		config.Consumer.Return.Errors = true
+		config.Group.Return.Notifications = true
+		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 
-		if err != nil {
-			panic(err)
-		}
+		consumer, err := cluster.NewConsumer([]string{*bootstrapServers}, groupID.String(), *topics, config)
+		die(err)
 
-		c.SubscribeTopics(*topics, nil)
+		defer consumer.Close()
 
+		// trap SIGINT to trigger a shutdown.
+		signals := make(chan os.Signal, 1)
+		signal.Notify(signals, os.Interrupt)
+
+		// consume errors
+		go func() {
+			for err := range consumer.Errors() {
+				log.Printf("Error: %v\n", err)
+			}
+		}()
+
+		// consume notifications
+		go func() {
+			for ntf := range consumer.Notifications() {
+				log.Printf("Rebalanced: %+v\n", ntf)
+			}
+		}()
+
+		// consume messages, watch signals
 		for {
-			msg, err := c.ReadMessage(-1)
+			select {
+			case msg, ok := <-consumer.Messages():
+				if ok {
 
-			if err != nil {
-				fmt.Printf("Consumer error: %v (%v)\n", err, msg)
-				break
+					fmt.Printf("[%s]----------------\n", msg.Timestamp)
+					fmt.Printf("Headers on %s/%d:", msg.Topic, msg.Partition)
+					for _, header := range msg.Headers {
+						fmt.Printf(" %s=%s", header.Key, header.Value)
+					}
+					fmt.Printf("\n")
+
+					fmt.Printf("Message on %s/%d: %s\n", msg.Topic, msg.Partition, msg.Value)
+
+					// fmt.Fprintf(os.Stdout, "%s/%d/%d\t%s\t%s\t%v\n", msg.Topic, msg.Partition, msg.Offset, msg.Key, msg.Value, msg.Headers)
+					consumer.MarkOffset(msg, "") // mark message as processed
+				}
+			case <-signals:
+				return
 			}
-
-			fmt.Printf("[%s]----------------\n", msg.Timestamp)
-			fmt.Printf("Headers on %s:", msg.TopicPartition)
-			for _, header := range msg.Headers {
-				fmt.Printf(" %s=%s", header.Key, string(header.Value))
-			}
-			fmt.Printf("\n")
-
-			fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
 		}
-
-		c.Close()
 	}
 
 	app.Run(os.Args)
+}
+
+func die(err error) {
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		cli.Exit(1)
+	}
 }
