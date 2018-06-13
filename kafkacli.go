@@ -10,9 +10,9 @@ import (
 
 func main() {
 	app := cli.App("kafkacli", "Kafka consumer")
-	app.Spec = "-b -t..."
+	app.Spec = "[-b] -t..."
 	var (
-		bootstrapServers = app.StringOpt("b broker brokers", "localhost", "brokers")
+		bootstrapServers = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
 		topics           = app.StringsOpt("t topic", nil, "topic")
 	)
 
