@@ -35,6 +35,7 @@ func main() {
 			break
 		}
 
+		fmt.Printf("[%s]----------------\n", msg.Timestamp)
 		fmt.Printf("Headers on %s:", msg.TopicPartition)
 		for _, header := range msg.Headers {
 			fmt.Printf(" %s=%s", header.Key, string(header.Value))
@@ -42,7 +43,6 @@ func main() {
 		fmt.Printf("\n")
 
 		fmt.Printf("Message on %s: %s\n", msg.TopicPartition, string(msg.Value))
-		fmt.Printf("----------------\n")
 	}
 
 	c.Close()
