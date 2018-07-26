@@ -32,7 +32,7 @@ func main() {
 		config.Version = sarama.V1_0_0_0
 		config.Consumer.Return.Errors = true
 		config.Group.Return.Notifications = true
-		config.Consumer.Offsets.Initial = sarama.OffsetOldest
+		config.Consumer.Offsets.Initial = sarama.OffsetNewest
 
 		consumer, err := cluster.NewConsumer([]string{*bootstrapServers}, groupID.String(), *topics, config)
 		die(err)
@@ -70,7 +70,7 @@ func main() {
 					}
 					fmt.Printf("\n")
 
-					fmt.Printf("Message on %s/%d: %s\n", msg.Topic, msg.Partition, msg.Value)
+					fmt.Printf("Message on %s/%d: [%s]%s\n", msg.Topic, msg.Partition, msg.Key, msg.Value)
 
 					// fmt.Fprintf(os.Stdout, "%s/%d/%d\t%s\t%s\t%v\n", msg.Topic, msg.Partition, msg.Offset, msg.Key, msg.Value, msg.Headers)
 					consumer.MarkOffset(msg, "") // mark message as processed
