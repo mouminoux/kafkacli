@@ -66,18 +66,7 @@ func main() {
 			select {
 			case msg, ok := <-consumer.Messages():
 				if ok {
-
-					fmt.Printf("[%s]----------------\n", msg.Timestamp)
-					fmt.Printf("Headers on %s/%d:", msg.Topic, msg.Partition)
-					for _, header := range msg.Headers {
-						fmt.Printf(" %s=%s", header.Key, header.Value)
-					}
-					fmt.Printf("\n")
-
-					fmt.Printf("Message on %s/%d: [%s]%s\n", msg.Topic, msg.Partition, msg.Key, msg.Value)
-
-					// fmt.Fprintf(os.Stdout, "%s/%d/%d\t%s\t%s\t%v\n", msg.Topic, msg.Partition, msg.Offset, msg.Key, msg.Value, msg.Headers)
-					consumer.MarkOffset(msg, "") // mark message as processed
+					displayMessage(msg)
 				}
 			case <-signals:
 				return
@@ -86,6 +75,16 @@ func main() {
 	}
 
 	app.Run(os.Args)
+}
+
+func displayMessage(msg *sarama.ConsumerMessage) {
+	fmt.Printf("[%s]----------------\n", msg.Timestamp)
+	fmt.Printf("Headers on %s/%d:", msg.Topic, msg.Partition)
+	for _, header := range msg.Headers {
+		fmt.Printf(" %s=%s", header.Key, header.Value)
+	}
+	fmt.Printf("\n")
+	fmt.Printf("Message on %s/%d: [%s]%s\n", msg.Topic, msg.Partition, msg.Key, msg.Value)
 }
 
 func die(err error) {
