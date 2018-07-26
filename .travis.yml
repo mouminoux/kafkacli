@@ -15,8 +15,9 @@ deploy:
   on:
     tags: true
     go: 1.9
+  api-key:
+    secure: cz3sd4CBje6cWhskFUyzdJi2hJekSHwdMhiTUhG60MyvGkl+hb2fPV0+nPRqWdLrTnZ4tF9DvXpMl6le6U/ch2MZzYQF7n2NftzZsijajLZWcMmItyRirq++7axF9RnRgFSgSl4gfVuf+M4ZHMEZTg6SHy1fSSOd5Um4SHbInR3yHNNW2PT/nt+I6Q8lDGD6HFwqmvFplPhBo31p8mnFxoT4D1YcFrUHbhGmwdPvZhHLV6WqkFBY0D+NCL8G1IpaG3gJo+3sIfORrkjUYWo32hj/zA5HpZ1ExE1y+/VTbJAFn0nvktpbC5nTVIJ8BcTiI3UMATCzuceJPfpk7KaPPSLs81RwIvw+5UzkZlgwlvQqZyt7JT5WxCbpnXi2Q5Nf1p5JRJvYMWgLJxhdJE1ocr0XSEBEjZFEiN6A8ES7Mresm9MkLfpWvsUJi2/1H1pFbQkORwWaO4wEU0mpOs0xtfmr81yPY0sM8D+brQEDLtDPmQvvXUiKjaOznJVRxL7Ec7yXsFCI5YjrPE8RJrbdUxC0caA9SSbXSfpYLWSQ32cyxkwk8xns2t7hTaIJeReCGDX9DRuhhOJ9PWJv9qrnoByaIwSpJet18g8J1baIVNEZS8NNueTUj83SzQe8EU3Y+0QvW/kSdKTgf0C1BkF0pGYn9CaSmH8mmOgoNyL4FTM=
 before_install:
-- openssl aes-256-cbc -K $encrypted_5dd58f501b7d_key -iv $encrypted_5dd58f501b7d_iv
-  -in github_deploy_key.enc -out github_deploy_key -d
-- curl -L -s https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64 -o $GOPATH/bin/dep
+- curl -L -s https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64
+  -o $GOPATH/bin/dep
 - chmod +x $GOPATH/bin/dep
