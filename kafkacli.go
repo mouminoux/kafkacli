@@ -8,7 +8,7 @@ import (
 
 	"github.com/Shopify/sarama"
 
-	cluster "github.com/bsm/sarama-cluster"
+	"github.com/bsm/sarama-cluster"
 
 	"github.com/jawher/mow.cli"
 	"github.com/satori/go.uuid"
@@ -16,10 +16,11 @@ import (
 
 func main() {
 	app := cli.App("kafkacli", "Kafka consumer")
-	app.Spec = "[-b] -t..."
+	app.Spec = "[-b] -t... [--from-beginning]"
 	var (
 		bootstrapServers = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
 		topics           = app.StringsOpt("t topic", nil, "topic")
+		fromBeginning    = app.BoolOpt("from-beginning", false, "start with the earliest message")
 	)
 
 	app.Action = func() {
@@ -32,6 +33,10 @@ func main() {
 		config.Consumer.Return.Errors = true
 		config.Group.Return.Notifications = true
 		config.Consumer.Offsets.Initial = sarama.OffsetNewest
+
+		if *fromBeginning {
+			config.Consumer.Offsets.Initial = sarama.OffsetOldest
+		}
 
 		consumer, err := cluster.NewConsumer([]string{*bootstrapServers}, groupID.String(), *topics, config)
 		die(err)
