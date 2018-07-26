@@ -78,13 +78,17 @@ func main() {
 }
 
 func displayMessage(msg *sarama.ConsumerMessage) {
-	fmt.Printf("[%s]----------------\n", msg.Timestamp)
-	fmt.Printf("Headers on %s/%d:", msg.Topic, msg.Partition)
+	fmt.Printf("[%s] %s/%d----------------\n", msg.Timestamp, msg.Topic, msg.Partition)
+	fmt.Printf("Headers:")
 	for _, header := range msg.Headers {
 		fmt.Printf(" %s=%s", header.Key, header.Value)
 	}
 	fmt.Printf("\n")
-	fmt.Printf("Message on %s/%d: [%s]%s\n", msg.Topic, msg.Partition, msg.Key, msg.Value)
+	fmt.Printf("Message")
+	if msg.Key != nil {
+		fmt.Printf("[%s]%", msg.Key)
+	}
+	fmt.Printf(": %s\n", msg.Value)
 }
 
 func die(err error) {
