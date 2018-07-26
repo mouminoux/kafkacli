@@ -17,3 +17,5 @@ kafkacli
 
 .idea/*
 *.iml
+
+vendor

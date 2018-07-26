@@ -25,8 +25,7 @@ func main() {
 	app.Action = func() {
 		fmt.Printf("Topics: %v from %v", *topics, *bootstrapServers)
 
-		groupID, err := uuid.NewV4()
-		die(err)
+		groupID := uuid.NewV4()
 
 		config := cluster.NewConfig()
 		config.Version = sarama.V1_0_0_0
