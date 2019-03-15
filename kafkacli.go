@@ -17,11 +17,12 @@ import (
 
 func main() {
 	app := cli.App("kafkacli", "Kafka consumer")
-	app.Spec = "[-b] -t... [--from-beginning] [-m] [-h...]"
+	app.Spec = "[-b] -t... [--from-beginning] [-g] [-m] [-h...]"
 	var (
 		bootstrapServers = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
 		topics           = app.StringsOpt("t topic", nil, "topic")
 		fromBeginning    = app.BoolOpt("from-beginning", false, "start with the earliest message")
+		consumerGroupId  = app.StringOpt("g consumer-group", "", "consumer group id")
 		message          = app.StringOpt("m message", "", "message message")
 		headers          = app.StringsOpt("h header", nil, "message header <key=value>")
 	)
@@ -30,7 +31,7 @@ func main() {
 		if *message != "" {
 			produce(bootstrapServers, topics, headers, message)
 		} else {
-			consume(bootstrapServers, topics, fromBeginning)
+			consume(bootstrapServers, topics, fromBeginning, consumerGroupId)
 		}
 
 	}
@@ -38,7 +39,7 @@ func main() {
 	die(app.Run(os.Args))
 }
 
-func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool) {
+func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, consumerGroupId *string) {
 	fmt.Printf("Topics: %v from %v", *topics, *bootstrapServers)
 
 	config := cluster.NewConfig()
@@ -51,8 +52,11 @@ func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool) {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	consumerGroupId := uuid.NewV4()
-	consumer, err := cluster.NewConsumer(strings.Split(*bootstrapServers, ","), consumerGroupId.String(), *topics, config)
+	if *consumerGroupId == "" {
+		uuidString := uuid.NewV4().String()
+		consumerGroupId = &uuidString
+	}
+	consumer, err := cluster.NewConsumer(strings.Split(*bootstrapServers, ","), *consumerGroupId, *topics, config)
 	die(err)
 	defer consumer.Close()
 
