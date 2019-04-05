@@ -6,12 +6,11 @@ Kafkacli is a consumer and producer client for Apache Kafka.
 ```
 kafkacli [-b] -t... [--from-beginning] [-g] [-m] [-h...]
 
-Options:                 
+Options:
   -b, --broker           brokers (default "localhost:9092")
   -t, --topic            topic
       --from-beginning   start with the earliest message
   -g, --consumer-group   consumer group id
   -m, --message          message message
   -h, --header           message header <key=value>
-
 ```
