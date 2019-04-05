@@ -1,6 +1,3 @@
-setup:
-	dep ensure
-
 build:
 	go build
 

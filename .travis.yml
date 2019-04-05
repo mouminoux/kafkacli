@@ -1,12 +1,18 @@
 sudo: false
 language: go
 go:
-- 1.9
-install: make setup build
+- 1.12
+
+env:
+  - GO111MODULE=on
+
+install: make build
+
 before_deploy:
 - mkdir -p bin
 - GOOS=linux GOARCH=amd64  go build -o bin/kafkacli-Linux-x86_64  -ldflags="-X main.version=$TRAVIS_TAG"
 - GOOS=darwin GOARCH=amd64 go build -o bin/kafkacli-Darwin-x86_64 -ldflags="-X main.version=$TRAVIS_TAG"
+
 deploy:
   provider: releases
   file_glob: true
@@ -14,10 +20,6 @@ deploy:
   skip_cleanup: true
   on:
     tags: true
-    go: 1.9
+    go: 1.12
   api-key:
     secure: RsH+2wuqMIP26WZ++1+fZ1uEPAHZks5g396EAEpFNNWOLtJ6c9aKH2Zxc2VY8pGACJeziZqAP1c+/vMznQ1aeaUiISBo2RgtktDZOvoMyDnNLremleV658Kr608n7veccoWtqJorTzqe/YjUHHvBDNP6KmupDMwIedmimc4jjQGLC+LtnpQM1eQiH105HY/RJqCkunSDAjLmLvdrECd0+TnO+TBb1hXCvIHimaU4FppVYV4pMW41w76KJksXw1PV02u9MQpf5QLdxw6UqQgSeK2xH6024yrRbCVyvqyGp9Ok+upYYpCkJEgkEI8Sf14y6pALGJSZblKfraj30f9CvEZsk/w9m0QSFhv97LRrh1SKhrhISpRGEQgaKg6+AHUeyN+4hqfzmTlDXIW8xwscXSlwm8TVa2QFLBRbx9PcS0kglh5hezt94391EWDxAP5hHL37hFOqe+HdQbkpDtMTzzimMxumNJ5Ih7UIQsBo33pGnGo1jnyLLEDma2pC2MjSsF0xqaiTeoQklPzhQ0WNFeqRtF7tlv7Uie1zxX3XYbkUuwWWxd464+bZEMrOi5JgkkMD9MDvkswMIP6jkP6Y4/1hDXvufJBEjxHVMm6qwKSFJ5r/khChEEYkEzu4aRVvfB+PcnqdxJ7lHlgY09HK+M50sA7kRvk/Ws3+gtj1Vh8=
-before_install:
-- curl -L -s https://github.com/golang/dep/releases/download/v0.5.0/dep-linux-amd64
-  -o $GOPATH/bin/dep
-- chmod +x $GOPATH/bin/dep
