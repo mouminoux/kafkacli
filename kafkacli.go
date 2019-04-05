@@ -2,17 +2,18 @@ package main
 
 import (
 	"fmt"
-	"github.com/bsm/sarama-cluster"
-	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
 
+	cluster "github.com/bsm/sarama-cluster"
+	"github.com/pkg/errors"
+	uuid "github.com/satori/go.uuid"
+
 	"github.com/Shopify/sarama"
 
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
 )
 
 func main() {
@@ -58,7 +59,12 @@ func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, co
 	}
 	consumer, err := cluster.NewConsumer(strings.Split(*bootstrapServers, ","), *consumerGroupId, *topics, config)
 	die(err)
-	defer consumer.Close()
+
+	defer func() {
+		if err := consumer.Close(); err != nil {
+			log.Printf("error while closing consumer: %+v\n", err)
+		}
+	}()
 
 	// trap SIGINT to trigger a shutdown.
 	signals := make(chan os.Signal, 1)
@@ -90,6 +96,7 @@ func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, co
 		}
 	}
 }
+
 func produce(bootstrapServers *string, topics *[]string, headers *[]string, message *string) {
 	config := sarama.NewConfig()
 	config.Version = sarama.V1_0_0_0
@@ -99,7 +106,12 @@ func produce(bootstrapServers *string, topics *[]string, headers *[]string, mess
 
 	producer, err := sarama.NewSyncProducer(strings.Split(*bootstrapServers, ","), config)
 	die(err)
-	defer producer.Close()
+
+	defer func() {
+		if err := producer.Close(); err != nil {
+			log.Printf("error while closing producer: %+v\n", err)
+		}
+	}()
 
 	var kafkaHeaders []sarama.RecordHeader
 	for _, element := range *headers {
@@ -130,10 +142,6 @@ func produce(bootstrapServers *string, topics *[]string, headers *[]string, mess
 		if err != nil {
 			log.Printf("%+v\n", err)
 		}
-	}
-	err = producer.Close()
-	if err != nil {
-		log.Printf("%+v\n", err)
 	}
 }
 
