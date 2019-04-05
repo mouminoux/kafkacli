@@ -16,7 +16,7 @@ import (
 )
 
 func main() {
-	app := cli.App("kafkacli", "Kafka consumer")
+	app := cli.App("kafkacli", "Kafkacli")
 	app.Spec = "[-b] -t... [--from-beginning] [-g] [-m] [-h...]"
 	var (
 		bootstrapServers = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
