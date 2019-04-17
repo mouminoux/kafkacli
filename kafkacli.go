@@ -7,32 +7,33 @@ import (
 	"os/signal"
 	"strings"
 
-	cluster "github.com/bsm/sarama-cluster"
+	"github.com/bsm/sarama-cluster"
 	"github.com/pkg/errors"
-	uuid "github.com/satori/go.uuid"
+	"github.com/satori/go.uuid"
 
 	"github.com/Shopify/sarama"
 
-	cli "github.com/jawher/mow.cli"
+	"github.com/jawher/mow.cli"
 )
 
 func main() {
 	app := cli.App("kafkacli", "Kafkacli")
-	app.Spec = "[-b] -t... [--from-beginning] [-g] [-m] [-h...]"
+	app.Spec = "[-b] -t... [--from-beginning] [-g] [-m] [-h...] [-e]"
 	var (
-		bootstrapServers = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
-		topics           = app.StringsOpt("t topic", nil, "topic")
-		fromBeginning    = app.BoolOpt("from-beginning", false, "start with the earliest message")
-		consumerGroupId  = app.StringOpt("g consumer-group", "", "consumer group id")
-		message          = app.StringOpt("m message", "", "message message")
-		headers          = app.StringsOpt("h header", nil, "message header <key=value>")
+		bootstrapServers   = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
+		topics             = app.StringsOpt("t topic", nil, "topic")
+		fromBeginning      = app.BoolOpt("from-beginning", false, "start with the earliest message")
+		consumerGroupId    = app.StringOpt("g consumer-group", "", "consumer group id")
+		message            = app.StringOpt("m message", "", "message message")
+		headers            = app.StringsOpt("h header", nil, "message header <key=value>")
+		existOnLastMessage = app.BoolOpt("e exit", false, "exit when last message received")
 	)
 
 	app.Action = func() {
 		if *message != "" {
 			produce(bootstrapServers, topics, headers, message)
 		} else {
-			consume(bootstrapServers, topics, fromBeginning, consumerGroupId)
+			consume(bootstrapServers, topics, fromBeginning, consumerGroupId, existOnLastMessage)
 		}
 
 	}
@@ -40,8 +41,8 @@ func main() {
 	die(app.Run(os.Args))
 }
 
-func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, consumerGroupId *string) {
-	fmt.Printf("Topics: %v from %v", *topics, *bootstrapServers)
+func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, consumerGroupId *string, existOnLastMessage *bool) {
+	fmt.Printf("Topics: %v from %v\n", *topics, *bootstrapServers)
 
 	config := cluster.NewConfig()
 	config.Version = sarama.V1_0_0_0
@@ -77,24 +78,47 @@ func consume(bootstrapServers *string, topics *[]string, fromBeginning *bool, co
 		}
 	}()
 
+	startConsuming := make(chan struct{})
+	var partitionToRead int
+
 	// consume notifications
 	go func() {
 		for ntf := range consumer.Notifications() {
 			log.Printf("Rebalanced: %+v\n", ntf)
+			if len(ntf.Claimed) != 0 {
+				for _, topic := range ntf.Claimed {
+					partitionToRead += len(topic)
+				}
+				startConsuming <- struct{}{}
+			}
 		}
 	}()
 
 	// consume messages, watch signals
+	<-startConsuming
+
+	var messageCount int
+
 	for {
 		select {
 		case msg, ok := <-consumer.Messages():
 			if ok {
 				displayMessage(msg)
+				messageCount++
+				marks := consumer.HighWaterMarks()
+				if *existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
+					partitionToRead -= 1
+				}
 			}
 		case <-signals:
-			return
+			partitionToRead = 0
+		}
+
+		if partitionToRead == 0 {
+			break
 		}
 	}
+	log.Printf("%d messages received\n", messageCount)
 }
 
 func produce(bootstrapServers *string, topics *[]string, headers *[]string, message *string) {
