@@ -5,46 +5,49 @@ import (
 	"crypto/x509"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"os"
-	"os/signal"
-	"strings"
-
-	"github.com/bsm/sarama-cluster"
-	"github.com/pkg/errors"
-	"github.com/satori/go.uuid"
 
 	"github.com/Shopify/sarama"
+	cluster "github.com/bsm/sarama-cluster"
+	"github.com/pkg/errors"
 
-	"github.com/jawher/mow.cli"
+	cli "github.com/jawher/mow.cli"
+)
+
+var (
+	app = cli.App("kafkacli", "Kafkacli")
+
+	bootstrapServers = app.Strings(cli.StringsOpt{
+		Name:  "b broker brokers",
+		Value: []string{"localhost:9092"},
+		Desc:  "brokers",
+	})
+	useSSL = app.Bool(cli.BoolOpt{
+		Name: "s secure",
+		Desc: "use SSL",
+	})
+	sslCAFile = app.String(cli.StringOpt{
+		Name:   "ssl-cafile",
+		EnvVar: "KAFKACLI_SSL_CA_FILE",
+		Desc:   "filename of CA file to use in certificate verification",
+	})
+	sslCertFile = app.String(cli.StringOpt{
+		Name:   "ssl-certfile",
+		EnvVar: "KAFKACLI_SSL_CERT_FILE",
+		Desc:   "filename of file in PEM format containing the client certificate",
+	})
+	sslKeyFile = app.String(cli.StringOpt{
+		Name:   "ssl-keyfile",
+		EnvVar: "KAFKACLI_SSL_KEY_FILE",
+		Desc:   "filename containing the client private key",
+	})
 )
 
 func main() {
-	app := cli.App("kafkacli", "Kafkacli")
-	app.Spec = "[-b] -t... [--from-beginning] [-g] [-m] [-h...] [-e] [-s] [--ssl-cafile] [--ssl-certfile] [--ssl-keyfile]"
-	var (
-		bootstrapServers   = app.StringOpt("b broker brokers", "localhost:9092", "brokers")
-		topics             = app.StringsOpt("t topic", nil, "topic")
-		fromBeginning      = app.BoolOpt("from-beginning", false, "start with the earliest message")
-		consumerGroupId    = app.StringOpt("g consumer-group", "", "consumer group id")
-		message            = app.StringOpt("m message", "", "message message")
-		headers            = app.StringsOpt("h header", nil, "message header <key=value>")
-		existOnLastMessage = app.BoolOpt("e exit", false, "exit when last message received")
-		useSSL             = app.BoolOpt("s secure", false, "use SSL")
-		sslCAFile          = app.StringOpt("ssl-cafile", "", "filename of CA file to use in certificate verification")
-		sslCertFile        = app.StringOpt("ssl-certfile", "", "filename of file in PEM format containing the client certificate")
-		sslKeyFile         = app.StringOpt("ssl-keyfile", "", "filename containing the client private key")
-	)
+	app.Spec = "[-b...] [--ssl-cafile] [--ssl-certfile] [--ssl-keyfile]"
 
-	app.Action = func() {
-		config := config(*useSSL, *sslCAFile, *sslCertFile, *sslKeyFile)
-
-		if *message != "" {
-			produce(*config, *bootstrapServers, *topics, *headers, *message)
-		} else {
-			consume(*config, *bootstrapServers, *topics, *fromBeginning, *consumerGroupId, *existOnLastMessage)
-		}
-	}
+	app.Command("consume", "consume and display messages from 1 or more topics", consumeCmd)
+	app.Command("produce", "produce a message into 1 or more topics", produceCmd)
 
 	die(app.Run(os.Args))
 }
@@ -87,136 +90,6 @@ func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string
 		config.Net.TLS.Config.RootCAs = caCertPool
 	}
 	return config
-}
-
-func consume(config cluster.Config, bootstrapServers string, topics []string, fromBeginning bool, consumerGroupId string, existOnLastMessage bool) {
-	fmt.Printf("Topics: %v from %v\n", topics, bootstrapServers)
-
-	if fromBeginning {
-		config.Consumer.Offsets.Initial = sarama.OffsetOldest
-	}
-
-	if consumerGroupId == "" {
-		uuidString := uuid.NewV4().String()
-		consumerGroupId = uuidString
-	}
-	consumer, err := cluster.NewConsumer(strings.Split(bootstrapServers, ","), consumerGroupId, topics, &config)
-	die(err)
-
-	defer func() {
-		if err := consumer.Close(); err != nil {
-			log.Printf("error while closing consumer: %+v\n", err)
-		}
-	}()
-
-	// trap SIGINT to trigger a shutdown.
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
-
-	// consume errors
-	go func() {
-		for err := range consumer.Errors() {
-			log.Printf("Error: %v\n", err)
-		}
-	}()
-
-	startConsuming := make(chan struct{})
-	var partitionToRead int
-
-	// consume notifications
-	go func() {
-		for ntf := range consumer.Notifications() {
-			log.Printf("Rebalanced: %+v\n", ntf)
-			if len(ntf.Claimed) != 0 {
-				for _, topic := range ntf.Claimed {
-					partitionToRead += len(topic)
-				}
-				startConsuming <- struct{}{}
-			}
-		}
-	}()
-
-	// consume messages, watch signals
-	<-startConsuming
-
-	var messageCount int
-
-	for {
-		select {
-		case msg, ok := <-consumer.Messages():
-			if ok {
-				displayMessage(msg)
-				messageCount++
-				marks := consumer.HighWaterMarks()
-				if existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
-					partitionToRead -= 1
-				}
-			}
-		case <-signals:
-			partitionToRead = 0
-		}
-
-		if partitionToRead == 0 {
-			break
-		}
-	}
-	log.Printf("%d messages received\n", messageCount)
-}
-
-func produce(config cluster.Config, bootstrapServers string, topics []string, headers []string, message string) {
-	producer, err := sarama.NewSyncProducer(strings.Split(bootstrapServers, ","), &config.Config)
-	die(err)
-
-	defer func() {
-		if err := producer.Close(); err != nil {
-			log.Printf("error while closing producer: %+v\n", err)
-		}
-	}()
-
-	var kafkaHeaders []sarama.RecordHeader
-	for _, element := range headers {
-		headerKeyValue := strings.Split(element, "=")
-		if len(headerKeyValue) != 2 {
-			die(errors.New("Invalid header param"))
-		}
-
-		headerKey := headerKeyValue[0]
-		headerValue := headerKeyValue[1]
-
-		newHeader := sarama.RecordHeader{
-			Key:   []byte(headerKey),
-			Value: []byte(headerValue),
-		}
-		kafkaHeaders = append(kafkaHeaders, newHeader)
-	}
-
-	for _, topic := range topics {
-		message := sarama.ProducerMessage{
-			Topic:   topic,
-			Headers: kafkaHeaders,
-			Value:   sarama.StringEncoder(message),
-		}
-
-		log.Printf("Send msg %+v\n", message)
-		_, _, err = producer.SendMessage(&message)
-		if err != nil {
-			log.Printf("%+v\n", err)
-		}
-	}
-}
-
-func displayMessage(msg *sarama.ConsumerMessage) {
-	fmt.Printf("[%s] %s/%d----------------\n", msg.Timestamp, msg.Topic, msg.Partition)
-	fmt.Printf("Headers:")
-	for _, header := range msg.Headers {
-		fmt.Printf(" %s=%s", header.Key, header.Value)
-	}
-	fmt.Printf("\n")
-	fmt.Printf("Message")
-	if msg.Key != nil {
-		fmt.Printf("[%s]%", msg.Key)
-	}
-	fmt.Printf(": %s\n", msg.Value)
 }
 
 func die(err error) {
