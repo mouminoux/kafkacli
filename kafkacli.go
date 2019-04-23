@@ -37,19 +37,19 @@ func main() {
 	)
 
 	app.Action = func() {
-		config := config(useSSL, sslCAFile, sslCertFile, sslKeyFile)
+		config := config(*useSSL, *sslCAFile, *sslCertFile, *sslKeyFile)
 
 		if *message != "" {
-			produce(config, bootstrapServers, topics, headers, message)
+			produce(*config, *bootstrapServers, *topics, *headers, *message)
 		} else {
-			consume(config, bootstrapServers, topics, fromBeginning, consumerGroupId, existOnLastMessage)
+			consume(*config, *bootstrapServers, *topics, *fromBeginning, *consumerGroupId, *existOnLastMessage)
 		}
 	}
 
 	die(app.Run(os.Args))
 }
 
-func config(useSSL *bool, sslCAFile *string, sslCertFile *string, sslKeyFile *string) *cluster.Config {
+func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string) *cluster.Config {
 	config := cluster.NewConfig()
 	config.Version = sarama.V1_0_0_0
 	config.Group.Return.Notifications = true
@@ -61,25 +61,25 @@ func config(useSSL *bool, sslCAFile *string, sslCertFile *string, sslKeyFile *st
 	config.Producer.Retry.Max = 10
 	config.Producer.Return.Successes = true
 
-	if *useSSL || *sslCAFile != "" || *sslCertFile != "" || *sslKeyFile != "" {
+	if useSSL || sslCAFile != "" || sslCertFile != "" || sslKeyFile != "" {
 		config.Net.TLS.Enable = true
 	}
 
 	config.Net.TLS.Config = &tls.Config{}
 
-	if *sslCertFile != "" || *sslKeyFile != "" {
-		if *sslCertFile == "" && *sslKeyFile == "" {
+	if sslCertFile != "" || sslKeyFile != "" {
+		if sslCertFile == "" && sslKeyFile == "" {
 			die(errors.New("You need to specify both ssl-certfile and ssl-keyfile"))
 		}
 
-		cer, err := tls.LoadX509KeyPair(*sslCertFile, *sslKeyFile)
+		cer, err := tls.LoadX509KeyPair(sslCertFile, sslKeyFile)
 		die(err)
 
 		config.Net.TLS.Config.Certificates = []tls.Certificate{cer}
 	}
 
-	if *sslCAFile != "" {
-		caCert, err := ioutil.ReadFile(*sslCAFile)
+	if sslCAFile != "" {
+		caCert, err := ioutil.ReadFile(sslCAFile)
 		die(err)
 
 		caCertPool := x509.NewCertPool()
@@ -89,18 +89,18 @@ func config(useSSL *bool, sslCAFile *string, sslCertFile *string, sslKeyFile *st
 	return config
 }
 
-func consume(config *cluster.Config, bootstrapServers *string, topics *[]string, fromBeginning *bool, consumerGroupId *string, existOnLastMessage *bool) {
-	fmt.Printf("Topics: %v from %v\n", *topics, *bootstrapServers)
+func consume(config cluster.Config, bootstrapServers string, topics []string, fromBeginning bool, consumerGroupId string, existOnLastMessage bool) {
+	fmt.Printf("Topics: %v from %v\n", topics, bootstrapServers)
 
-	if *fromBeginning {
+	if fromBeginning {
 		config.Consumer.Offsets.Initial = sarama.OffsetOldest
 	}
 
-	if *consumerGroupId == "" {
+	if consumerGroupId == "" {
 		uuidString := uuid.NewV4().String()
-		consumerGroupId = &uuidString
+		consumerGroupId = uuidString
 	}
-	consumer, err := cluster.NewConsumer(strings.Split(*bootstrapServers, ","), *consumerGroupId, *topics, config)
+	consumer, err := cluster.NewConsumer(strings.Split(bootstrapServers, ","), consumerGroupId, topics, &config)
 	die(err)
 
 	defer func() {
@@ -148,7 +148,7 @@ func consume(config *cluster.Config, bootstrapServers *string, topics *[]string,
 				displayMessage(msg)
 				messageCount++
 				marks := consumer.HighWaterMarks()
-				if *existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
+				if existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
 					partitionToRead -= 1
 				}
 			}
@@ -163,8 +163,8 @@ func consume(config *cluster.Config, bootstrapServers *string, topics *[]string,
 	log.Printf("%d messages received\n", messageCount)
 }
 
-func produce(config *cluster.Config, bootstrapServers *string, topics *[]string, headers *[]string, message *string) {
-	producer, err := sarama.NewSyncProducer(strings.Split(*bootstrapServers, ","), &config.Config)
+func produce(config cluster.Config, bootstrapServers string, topics []string, headers []string, message string) {
+	producer, err := sarama.NewSyncProducer(strings.Split(bootstrapServers, ","), &config.Config)
 	die(err)
 
 	defer func() {
@@ -174,7 +174,7 @@ func produce(config *cluster.Config, bootstrapServers *string, topics *[]string,
 	}()
 
 	var kafkaHeaders []sarama.RecordHeader
-	for _, element := range *headers {
+	for _, element := range headers {
 		headerKeyValue := strings.Split(element, "=")
 		if len(headerKeyValue) != 2 {
 			die(errors.New("Invalid header param"))
@@ -190,11 +190,11 @@ func produce(config *cluster.Config, bootstrapServers *string, topics *[]string,
 		kafkaHeaders = append(kafkaHeaders, newHeader)
 	}
 
-	for _, topic := range *topics {
+	for _, topic := range topics {
 		message := sarama.ProducerMessage{
 			Topic:   topic,
 			Headers: kafkaHeaders,
-			Value:   sarama.StringEncoder(*message),
+			Value:   sarama.StringEncoder(message),
 		}
 
 		log.Printf("Send msg %+v\n", message)
