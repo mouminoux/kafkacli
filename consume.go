@@ -116,7 +116,7 @@ func displayMessagePretty(msg *sarama.ConsumerMessage) {
 	fmt.Printf("---------------- [%v] %s/%d ----------------\n", msg.Timestamp, msg.Topic, msg.Partition)
 	fmt.Printf("(Headers):\n")
 	for _, header := range msg.Headers {
-		fmt.Printf("- %q: %s\n", header.Key, header.Value)
+		fmt.Printf("- %q: %q\n", header.Key, header.Value)
 	}
 	if msg.Key != nil {
 		fmt.Printf("\n(Key): %s\n", msg.Key)
