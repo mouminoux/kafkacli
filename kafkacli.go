@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strings"
 
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
@@ -97,4 +98,15 @@ func die(err error) {
 		_, _ = fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		cli.Exit(1)
 	}
+}
+
+func splitFlatten(cs []string) []string {
+	var res []string
+	for _, c := range cs {
+		parts := strings.Split(c, ",")
+		for _, p := range parts {
+			res = append(res, strings.TrimSpace(p))
+		}
+	}
+	return res
 }

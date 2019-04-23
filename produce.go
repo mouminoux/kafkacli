@@ -33,7 +33,7 @@ func produceCmd(c *cli.Cmd) {
 		if *message == "" || *message == "-" {
 			*message = readStdin()
 		}
-		produce(*cfg, *bootstrapServers, *topics, *headers, *message)
+		produce(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *headers, *message)
 	}
 }
 

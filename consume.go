@@ -30,7 +30,7 @@ func consumeCmd(c *cli.Cmd) {
 
 	c.Action = func() {
 		cfg := config(*useSSL, *sslCAFile, *sslCertFile, *sslKeyFile)
-		consume(*cfg, *bootstrapServers, *topics, *prettyPrint, *fromBeginning, *consumerGroupId, *existOnLastMessage)
+		consume(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *prettyPrint, *fromBeginning, *consumerGroupId, *existOnLastMessage)
 	}
 }
 
