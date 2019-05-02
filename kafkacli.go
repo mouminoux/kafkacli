@@ -45,7 +45,7 @@ var (
 )
 
 func main() {
-	app.Spec = "[-b...] [--ssl-cafile] [--ssl-certfile] [--ssl-keyfile]"
+	app.Spec = "[-b...] [-s] [--ssl-cafile] [--ssl-certfile] [--ssl-keyfile]"
 
 	app.Command("consume", "consume and display messages from 1 or more topics", consumeCmd)
 	app.Command("produce", "produce a message into 1 or more topics", produceCmd)
