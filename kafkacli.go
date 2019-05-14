@@ -19,9 +19,10 @@ var (
 	app = cli.App("kafkacli", "Kafkacli")
 
 	bootstrapServers = app.Strings(cli.StringsOpt{
-		Name:  "b broker brokers",
-		Value: []string{"localhost:9092"},
-		Desc:  "brokers",
+		Name:   "b broker brokers",
+		Value:  []string{"localhost:9092"},
+		EnvVar: "KAFKACLI_BROKER",
+		Desc:   "brokers",
 	})
 	useSSL = app.Bool(cli.BoolOpt{
 		Name: "s secure",
