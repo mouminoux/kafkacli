@@ -1,4 +1,4 @@
-# Kafkacli [![Build Status](https://travis-ci.org/mouminoux/kafkacli.svg?branch=master)](https://travis-ci.org/mouminoux/kafkacli)
+# Kafkacli [![Build Status](https://travis-ci.org/mouminoux/kafkacli.svg?branch=master)](https://travis-ci.org/mouminoux/kafkacli) [![Go Report Card](https://goreportcard.com/badge/github.com/mouminoux/kafkacli)](https://goreportcard.com/report/github.com/mouminoux/kafkacli)
 
 Kafkacli is a consumer and producer client for Apache Kafka.
 
