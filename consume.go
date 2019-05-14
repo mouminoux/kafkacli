@@ -10,6 +10,8 @@ import (
 	"github.com/Shopify/sarama"
 	cluster "github.com/bsm/sarama-cluster"
 	cli "github.com/jawher/mow.cli"
+	"github.com/mouminoux/kafkacli/filter"
+	"github.com/pkg/errors"
 	uuid "github.com/satori/go.uuid"
 )
 
@@ -19,6 +21,9 @@ func consumeCmd(c *cli.Cmd) {
 		fromBeginning      = c.BoolOpt("from-beginning", false, "start with the earliest message")
 		consumerGroupId    = c.StringOpt("g consumer-group", "", "consumer group id. If unset, a random one will be generated")
 		existOnLastMessage = c.BoolOpt("e exit", false, "exit when last message received")
+		filters            = c.StringsOpt("filter", nil, `filter incoming messages against a set of conditions. Syntax: <filter-type>:<filter-condition>.
+The currently supported filters:
+* header filter: syntax: "header:<key>=<value>", e.g. --filter header:correlation-id=ac123-fds456`)
 
 		topics = c.Strings(cli.StringsArg{
 			Name: "TOPIC",
@@ -26,15 +31,24 @@ func consumeCmd(c *cli.Cmd) {
 		})
 	)
 
-	c.Spec = "[--from-beginning] [-g] [-e] [-p] TOPIC..."
+	c.Spec = "[--from-beginning] [-g] [-e] [-p] [--filter...] TOPIC..."
 
 	c.Action = func() {
 		cfg := config(*useSSL, *sslCAFile, *sslCertFile, *sslKeyFile)
-		consume(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *prettyPrint, *fromBeginning, *consumerGroupId, *existOnLastMessage)
+		f, err := parseFilters(*filters)
+		die(err)
+		consume(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *prettyPrint, *fromBeginning, *consumerGroupId, *existOnLastMessage, f)
 	}
 }
 
-func consume(config cluster.Config, bootstrapServers []string, topics []string, prettyPrint bool, fromBeginning bool, consumerGroupId string, existOnLastMessage bool) {
+func consume(config cluster.Config,
+	bootstrapServers []string,
+	topics []string,
+	prettyPrint bool,
+	fromBeginning bool,
+	consumerGroupId string,
+	existOnLastMessage bool,
+	f filter.Filter) {
 	fmt.Printf("Consuming from topic(s) %q, broker(s) %q\n", strings.Join(topics, ", "), strings.Join(bootstrapServers, ", "))
 
 	if fromBeginning {
@@ -89,18 +103,23 @@ func consume(config cluster.Config, bootstrapServers []string, topics []string, 
 	for {
 		select {
 		case msg, ok := <-consumer.Messages():
-			if ok {
-				if prettyPrint {
-					displayMessagePretty(msg)
-				} else {
-					displayMessageUgly(msg)
-				}
-				messageCount++
-				marks := consumer.HighWaterMarks()
-				if existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
-					partitionToRead -= 1
-				}
+			if !ok {
+				continue
 			}
+			if !f(msg) {
+				continue
+			}
+			if prettyPrint {
+				displayMessagePretty(msg)
+			} else {
+				displayMessageUgly(msg)
+			}
+			messageCount++
+			marks := consumer.HighWaterMarks()
+			if existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
+				partitionToRead -= 1
+			}
+
 		case <-signals:
 			partitionToRead = 0
 		}
@@ -136,4 +155,34 @@ func displayMessageUgly(msg *sarama.ConsumerMessage) {
 		fmt.Printf("[%s]%", msg.Key)
 	}
 	fmt.Printf(": %s\n", msg.Value)
+}
+
+func parseFilters(ffs []string) (filter.Filter, error) {
+	ff := make([]filter.Filter, len(ffs))
+	for i, fs := range ffs {
+		parts := strings.SplitN(fs, ":", 2)
+		if len(parts) != 2 {
+			return nil, errors.Errorf("Invalid filter %q. must be in <filter-type>:<filter-condition> format", fs)
+		}
+		switch parts[0] {
+		case "header", "h":
+			k, v, err := parseKEqV(parts[1])
+			if err != nil {
+				return nil, errors.Wrapf(err, "Invalid filter %q", fs)
+			}
+			ff[i] = filter.Header(k, v)
+		default:
+			return nil, errors.Errorf("Unknown filter type %q in filter %q", parts[0], fs)
+		}
+
+	}
+	return filter.Anded(ff), nil
+}
+
+func parseKEqV(s string) (string, string, error) {
+	parts := strings.SplitN(s, "=", 2)
+	if len(parts) != 2 {
+		return "", "", errors.Errorf("Invalid filter condition %q. must be in <x>=<y> format", s)
+	}
+	return parts[0], parts[1], nil
 }
