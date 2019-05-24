@@ -152,7 +152,7 @@ func displayMessageUgly(msg *sarama.ConsumerMessage) {
 	fmt.Printf("\n")
 	fmt.Printf("Message")
 	if msg.Key != nil {
-		fmt.Printf("[%s]%", msg.Key)
+		fmt.Printf("[%s]", msg.Key)
 	}
 	fmt.Printf(": %s\n", msg.Value)
 }
