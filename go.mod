@@ -4,7 +4,7 @@ go 1.12
 
 require (
 	github.com/DataDog/zstd v1.3.5
-	github.com/Shopify/sarama v1.21.0
+	github.com/Shopify/sarama v1.22.1
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/davecgh/go-spew v1.1.1
 	github.com/eapache/go-resiliency v1.1.0
