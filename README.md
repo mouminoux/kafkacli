@@ -84,6 +84,10 @@ Read all messages from 'my-topic' topic and filter messages when header key1 equ
 Use env var to define the default broker:
 
     $ KAFKACLI_BROKER=localhost:9092 kafkacli consume my-topic
+    
+Use SSL file to access secured broker:
+
+    $ kafkacli --ssl-cafile ca.pem --ssl-keyfile service.key --ssl-certfile service.cert -b my-secured-broker consume my-topic
 
 #### Producer
 
