@@ -88,6 +88,14 @@ Use env var to define the default broker:
 Use SSL file to access secured broker:
 
     $ kafkacli --ssl-cafile ca.pem --ssl-keyfile service.key --ssl-certfile service.cert -b my-secured-broker consume my-topic
+    
+You can also define env variables:
+
+    $ export KAFKACLI_BROKER=my-secured-broker
+    $ export KAFKACLI_SSL_CA_FILE=ca.pem
+    $ export KAFKACLI_SSL_CERT_FILE=service.cert
+    $ export KAFKACLI_SSL_KEY_FILE=service.key
+    $ kafkacli consume my-topic
 
 #### Producer
 
