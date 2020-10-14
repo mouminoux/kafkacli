@@ -7,7 +7,7 @@ require (
 	github.com/Shopify/sarama v1.21.0
 	github.com/bsm/sarama-cluster v2.1.15+incompatible
 	github.com/davecgh/go-spew v1.1.1
-	github.com/eapache/go-resiliency v1.1.0
+	github.com/eapache/go-resiliency v1.2.0
 	github.com/eapache/go-xerial-snappy v0.0.0-20180814174437-776d5712da21
 	github.com/eapache/queue v1.1.0
 	github.com/golang/snappy v0.0.1
