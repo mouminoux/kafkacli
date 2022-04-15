@@ -18,6 +18,7 @@ func produceCmd(c *cli.Cmd) {
 	var (
 		headers = c.StringsOpt("H header", nil, "message header <key=value>")
 		message = c.StringOpt("m message", "", "message message")
+		key     = c.StringOpt("k key", "", "key key")
 
 		topics = c.Strings(cli.StringsArg{
 			Name: "TOPIC",
@@ -25,7 +26,7 @@ func produceCmd(c *cli.Cmd) {
 		})
 	)
 
-	c.Spec = "[-H...] [-m=<message|->] TOPIC..."
+	c.Spec = "[-H...] [-m=<message|->]  [-k=<key>] TOPIC..."
 
 	c.Action = func() {
 		cfg := config(*useSSL, *sslCAFile, *sslCertFile, *sslKeyFile)
@@ -33,11 +34,11 @@ func produceCmd(c *cli.Cmd) {
 		if *message == "" || *message == "-" {
 			*message = readStdin()
 		}
-		produce(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *headers, *message)
+		produce(*cfg, splitFlatten(*bootstrapServers), splitFlatten(*topics), *headers, *message, *key)
 	}
 }
 
-func produce(config cluster.Config, bootstrapServers []string, topics []string, headers []string, message string) {
+func produce(config cluster.Config, bootstrapServers []string, topics []string, headers []string, message string, key string) {
 	producer, err := sarama.NewSyncProducer(bootstrapServers, &config.Config)
 	die(err)
 
@@ -68,6 +69,7 @@ func produce(config cluster.Config, bootstrapServers []string, topics []string, 
 		kafkaMessage := sarama.ProducerMessage{
 			Topic:   topic,
 			Headers: kafkaHeaders,
+			Key:     sarama.StringEncoder(key),
 			Value:   sarama.StringEncoder(message),
 		}
 
@@ -79,10 +81,11 @@ func produce(config cluster.Config, bootstrapServers []string, topics []string, 
 			}
 		}
 		fmt.Printf("(Payload):\n---\n%s\n---\n", message)
-		_, _, err = producer.SendMessage(&kafkaMessage)
+		var partition, offset, err = producer.SendMessage(&kafkaMessage)
 		if err != nil {
 			fmt.Printf("error: %+v\n", err)
 		}
+		fmt.Printf("Payload sent to partition %+v - resulting offset %+v\n", partition, offset)
 	}
 }
 
