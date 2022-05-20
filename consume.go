@@ -132,7 +132,7 @@ func consume(config cluster.Config,
 }
 
 func displayMessagePretty(msg *sarama.ConsumerMessage) {
-	fmt.Printf("---------------- [%v] %s/%d ----------------\n", msg.Timestamp, msg.Topic, msg.Partition)
+	fmt.Printf("---------------- [%v] %s/%d/%d ----------------\n", msg.Timestamp, msg.Topic, msg.Partition, msg.Offset)
 	fmt.Printf("(Headers):\n")
 	for _, header := range msg.Headers {
 		fmt.Printf("- %q: %q\n", header.Key, header.Value)
@@ -144,7 +144,7 @@ func displayMessagePretty(msg *sarama.ConsumerMessage) {
 }
 
 func displayMessageUgly(msg *sarama.ConsumerMessage) {
-	fmt.Printf("[%s] %s/%d----------------\n", msg.Timestamp, msg.Topic, msg.Partition)
+	fmt.Printf("[%s] %s/%d/%d ----------------\n", msg.Timestamp, msg.Topic, msg.Partition, msg.Offset)
 	fmt.Printf("Headers:")
 	for _, header := range msg.Headers {
 		fmt.Printf(" %s=%s", header.Key, header.Value)
