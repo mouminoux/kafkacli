@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
 	"github.com/pkg/errors"
 
 	cli "github.com/jawher/mow.cli"
@@ -54,10 +53,9 @@ func main() {
 	die(app.Run(os.Args))
 }
 
-func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string) *cluster.Config {
-	config := cluster.NewConfig()
+func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string) *sarama.Config {
+	config := sarama.NewConfig()
 	config.Version = sarama.V1_0_0_0
-	config.Group.Return.Notifications = true
 
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.Initial = sarama.OffsetNewest

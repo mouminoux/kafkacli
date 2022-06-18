@@ -1,14 +1,16 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
 	"os/signal"
 	"strings"
+	"sync"
+	"syscall"
 
 	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
 	cli "github.com/jawher/mow.cli"
 	"github.com/mouminoux/kafkacli/filter"
 	"github.com/pkg/errors"
@@ -41,7 +43,7 @@ The currently supported filters:
 	}
 }
 
-func consume(config cluster.Config,
+func consume(config sarama.Config,
 	bootstrapServers []string,
 	topics []string,
 	prettyPrint bool,
@@ -56,79 +58,81 @@ func consume(config cluster.Config,
 	}
 
 	if consumerGroupId == "" {
-		uuidString := uuid.NewV4().String()
-		consumerGroupId = uuidString
+		hostname, err := os.Hostname()
+		die(err)
+		consumerGroupId = "kafkacli-" + hostname + "-" + uuid.NewV4().String()
 	}
-	consumer, err := cluster.NewConsumer(bootstrapServers, consumerGroupId, topics, &config)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	client, err := sarama.NewConsumerGroup(bootstrapServers, consumerGroupId, &config)
 	die(err)
 
 	defer func() {
-		if err := consumer.Close(); err != nil {
+		if err := client.Close(); err != nil {
 			log.Printf("error while closing consumer: %+v\n", err)
 		}
 	}()
 
-	// trap SIGINT to trigger a shutdown.
-	signals := make(chan os.Signal, 1)
-	signal.Notify(signals, os.Interrupt)
+	consumer := Consumer{
+		ready:              make(chan bool),
+		stop:               make(chan bool),
+		prettyPrint:        prettyPrint,
+		existOnLastMessage: existOnLastMessage,
+		f:                  f,
+	}
 
-	// consume errors
+	consumptionIsPaused := false
+	wg := &sync.WaitGroup{}
+	wg.Add(1)
 	go func() {
-		for err := range consumer.Errors() {
-			fmt.Printf("Error: %v\n", err)
-		}
-	}()
-
-	startConsuming := make(chan struct{})
-	var partitionToRead int
-
-	// consume notifications
-	go func() {
-		for ntf := range consumer.Notifications() {
-			fmt.Printf("Rebalanced: %+v\n", ntf)
-			if len(ntf.Claimed) != 0 {
-				for _, topic := range ntf.Claimed {
-					partitionToRead += len(topic)
-				}
-				startConsuming <- struct{}{}
+		defer wg.Done()
+		for {
+			// `Consume` should be called inside an infinite loop, when a
+			// server-side rebalance happens, the consumer session will need to be
+			// recreated to get the new claims
+			if err := client.Consume(ctx, topics, &consumer); err != nil {
+				log.Panicf("Error from consumer: %v", err)
 			}
+			// check if context was cancelled, signaling that the consumer should stop
+			if ctx.Err() != nil {
+				return
+			}
+			consumer.ready = make(chan bool)
 		}
 	}()
 
-	// consume messages, watch signals
-	<-startConsuming
+	<-consumer.ready // Await till the consumer has been set up
+	fmt.Println("Consumer up and running!...")
 
-	var messageCount int
+	sigusr1 := make(chan os.Signal, 1)
+	signal.Notify(sigusr1, syscall.SIGUSR1)
 
-	for {
+	sigterm := make(chan os.Signal, 1)
+	signal.Notify(sigterm, syscall.SIGINT, syscall.SIGTERM)
+
+	keepRunning := true
+	for keepRunning {
 		select {
-		case msg, ok := <-consumer.Messages():
-			if !ok {
-				continue
-			}
-			if !f(msg) {
-				continue
-			}
-			if prettyPrint {
-				displayMessagePretty(msg)
-			} else {
-				displayMessageUgly(msg)
-			}
-			messageCount++
-			marks := consumer.HighWaterMarks()
-			if existOnLastMessage && msg.Offset+1 == marks[msg.Topic][msg.Partition] {
-				partitionToRead -= 1
-			}
-
-		case <-signals:
-			partitionToRead = 0
-		}
-
-		if partitionToRead == 0 {
-			break
+		case <-ctx.Done():
+			log.Println("terminating: context cancelled")
+			keepRunning = false
+		case <-sigterm:
+			log.Println("terminating: via signal")
+			keepRunning = false
+		case <-sigusr1:
+			toggleConsumptionFlow(client, &consumptionIsPaused)
+		case <-consumer.stop:
+			log.Println("terminating: stopped by the consumer")
+			keepRunning = false
 		}
 	}
-	log.Printf("%d messages received\n", messageCount)
+	cancel()
+	wg.Wait()
+	if err = client.Close(); err != nil {
+		log.Panicf("Error closing client: %v", err)
+	}
+
+	log.Printf("%d messages received\n", consumer.messageCount)
 }
 
 func displayMessagePretty(msg *sarama.ConsumerMessage) {
@@ -185,4 +189,66 @@ func parseKEqV(s string) (string, string, error) {
 		return "", "", errors.Errorf("Invalid filter condition %q. must be in <x>=<y> format", s)
 	}
 	return parts[0], parts[1], nil
+}
+
+func toggleConsumptionFlow(client sarama.ConsumerGroup, isPaused *bool) {
+	if *isPaused {
+		client.ResumeAll()
+		log.Println("Resuming consumption")
+	} else {
+		client.PauseAll()
+		log.Println("Pausing consumption")
+	}
+
+	*isPaused = !*isPaused
+}
+
+// Consumer represents a Sarama consumer group consumer
+type Consumer struct {
+	ready              chan bool
+	stop               chan bool
+	prettyPrint        bool
+	existOnLastMessage bool
+	f                  filter.Filter
+	messageCount       int8
+}
+
+// Setup is run at the beginning of a new session, before ConsumeClaim
+func (consumer *Consumer) Setup(sarama.ConsumerGroupSession) error {
+	// Mark the consumer as ready
+	close(consumer.ready)
+	return nil
+}
+
+// Cleanup is run at the end of a session, once all ConsumeClaim goroutines have exited
+func (consumer *Consumer) Cleanup(sarama.ConsumerGroupSession) error {
+	return nil
+}
+
+// ConsumeClaim must start a consumer loop of ConsumerGroupClaim's Messages().
+func (consumer *Consumer) ConsumeClaim(session sarama.ConsumerGroupSession, claim sarama.ConsumerGroupClaim) error {
+	// NOTE:
+	// Do not move the code below to a goroutine.
+	// The `ConsumeClaim` itself is called within a goroutine, see:
+	// https://github.com/Shopify/sarama/blob/main/consumer_group.go#L27-L29
+	for message := range claim.Messages() {
+
+		if !consumer.f(message) {
+			continue
+		}
+
+		if consumer.prettyPrint {
+			displayMessagePretty(message)
+		} else {
+			displayMessageUgly(message)
+		}
+
+		consumer.messageCount++
+
+		session.MarkMessage(message, "")
+
+		close(consumer.stop)
+	}
+
+	return nil
 }

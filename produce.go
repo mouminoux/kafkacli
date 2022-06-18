@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
 	cli "github.com/jawher/mow.cli"
 	"github.com/pkg/errors"
 )
@@ -38,8 +37,8 @@ func produceCmd(c *cli.Cmd) {
 	}
 }
 
-func produce(config cluster.Config, bootstrapServers []string, topics []string, headers []string, message string, key string) {
-	producer, err := sarama.NewSyncProducer(bootstrapServers, &config.Config)
+func produce(config sarama.Config, bootstrapServers []string, topics []string, headers []string, message string, key string) {
+	producer, err := sarama.NewSyncProducer(bootstrapServers, &config)
 	die(err)
 
 	defer func() {
