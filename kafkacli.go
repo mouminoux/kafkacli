@@ -50,6 +50,7 @@ func main() {
 
 	app.Command("consume", "consume and display messages from 1 or more topics", consumeCmd)
 	app.Command("produce", "produce a message into 1 or more topics", produceCmd)
+	app.Command("consumer-groups", "list consumer groups", consumerGroupsCmd)
 
 	die(app.Run(os.Args))
 }
