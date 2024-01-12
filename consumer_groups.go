@@ -49,7 +49,7 @@ func consumerGroups(config cluster.Config, bootstrapServers []string, sorted *bo
 
 // extract all keys of the map, sort the keys if sorted flag is set
 func keys(groups map[string]string, sorted *bool) []string {
-	keys := make([]string, len(groups))
+	var keys []string
 	for consumerGroup, _ := range groups {
 		keys = append(keys, consumerGroup)
 	}
