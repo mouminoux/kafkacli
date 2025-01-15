@@ -4,12 +4,10 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"strings"
 
-	"github.com/Shopify/sarama"
-	cluster "github.com/bsm/sarama-cluster"
+	"github.com/IBM/sarama"
 	"github.com/pkg/errors"
 
 	cli "github.com/jawher/mow.cli"
@@ -50,14 +48,17 @@ func main() {
 
 	app.Command("consume", "consume and display messages from 1 or more topics", consumeCmd)
 	app.Command("produce", "produce a message into 1 or more topics", produceCmd)
+	app.Command("consumer-groups", "list consumer groups", consumerGroupsCmd)
+	app.Command("topics", "list topics", topicsCmd)
 
 	die(app.Run(os.Args))
 }
 
-func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string) *cluster.Config {
-	config := cluster.NewConfig()
+func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string) *sarama.Config {
+	config := sarama.NewConfig()
 	config.Version = sarama.V1_0_0_0
-	config.Group.Return.Notifications = true
+	// can't find what is corresponding in new version of sarama
+	//config.Group.Return.Notifications = true
 
 	config.Consumer.Return.Errors = true
 	config.Consumer.Offsets.Initial = sarama.OffsetNewest
@@ -84,7 +85,7 @@ func config(useSSL bool, sslCAFile string, sslCertFile string, sslKeyFile string
 	}
 
 	if sslCAFile != "" {
-		caCert, err := ioutil.ReadFile(sslCAFile)
+		caCert, err := os.ReadFile(sslCAFile)
 		die(err)
 
 		caCertPool := x509.NewCertPool()

@@ -1,7 +1,7 @@
 package filter
 
 import (
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 )
 
 func Header(key, value string) Filter {

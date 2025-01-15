@@ -1,7 +1,7 @@
 package filter
 
 import (
-	"github.com/Shopify/sarama"
+	"github.com/IBM/sarama"
 )
 
 type Filter func(message *sarama.ConsumerMessage) bool

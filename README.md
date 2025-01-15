@@ -65,6 +65,19 @@ Options:
   -m, --message   message message
 ```
 
+### Consumer groups
+
+```
+kafkacli consumer-groups --help
+
+Usage: kafkacli consumer-groups [OPTIONS]
+
+list consumer groups
+
+Options:         
+-s, --sorted   sort the consumer groups (ascending)
+```
+
 ### Examples
 
 #### Consumer
